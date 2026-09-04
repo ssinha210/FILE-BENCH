@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bench — PDF &amp; Image Toolbox</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --charcoal:#1B1E23;
+    --panel:#232830;
+    --panel-2:#2B313B;
+    --paper:#F5F3EE;
+    --blueprint:#5B9BC4;
+    --blueprint-dim:#3D6E8C;
+    --warm-grey:#9C9587;
+    --signal:#E8541E;
+    --line:#3A414D;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--charcoal);color:var(--paper);font-family:var(--sans);}
+  body{min-height:100vh;}
+
+  .frame{
+    display:flex;
+    min-height:100vh;
+  }
+
+  /* rail */
+  .rail{
+    width:220px;
+    flex-shrink:0;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    padding:28px 0;
+    display:flex;
+    flex-direction:column;
+  }
+  .rail-title{
+    padding:0 22px 22px 22px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:10px;
+  }
+  .rail-title .mark{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.08em;
+    color:var(--blueprint);
+  }
+  .rail-title h1{
+    font-size:19px;
+    font-weight:700;
+    margin:6px 0 0 0;
+    line-height:1.2;
+  }
+  .tool-btn{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    color:var(--warm-grey);
+    padding:13px 22px;
+    font-family:var(--sans);
+    font-size:14.5px;
+    font-weight:500;
+    cursor:pointer;
+    border-left:2px solid transparent;
+    transition:background .15s, color .15s;
+  }
+  .tool-btn:hover{ background:var(--panel-2); color:var(--paper); }
+  .tool-btn.active{
+    background:var(--panel-2);
+    color:var(--paper);
+    border-left:2px solid var(--blueprint);
+  }
+  .tool-btn .num{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--blueprint-dim);
+    width:16px;
+  }
+  .tool-btn.active .num{ color:var(--blueprint); }
+
+  .rail-foot{
+    margin-top:auto;
+    padding:16px 22px 0 22px;
+    border-top:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--warm-grey);
+    line-height:1.6;
+  }
+
+  /* main surface */
+  .surface{
+    flex:1;
+    padding:44px 56px;
+    max-width:920px;
+  }
+  .surface-head{ margin-bottom:28px; }
+  .surface-head .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--blueprint);
+    margin-bottom:6px;
+  }
+  .surface-head h2{
+    font-size:26px;
+    font-weight:700;
+    margin:0 0 8px 0;
+  }
+  .surface-head p{
+    color:var(--warm-grey);
+    font-size:14.5px;
+    max-width:56ch;
+    line-height:1.55;
+    margin:0;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:26px;
+    margin-bottom:20px;
+  }
+
+  .dropzone{
+    border:1.5px dashed var(--line);
+    border-radius:3px;
+    padding:34px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--blueprint);
+    background:rgba(91,155,196,0.06);
+  }
+  .dropzone .dz-title{ font-weight:600; font-size:14.5px; margin-bottom:4px; }
+  .dropzone .dz-sub{ font-family:var(--mono); font-size:11.5px; color:var(--warm-grey); }
+  .dropzone input{ display:none; }
+
+  .file-list{ margin-top:16px; display:flex; flex-direction:column; gap:8px; }
+  .file-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:10px 12px;
+  }
+  .file-row .fname{ flex:1; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-row .fsize{ font-family:var(--mono); font-size:11px; color:var(--warm-grey); flex-shrink:0; }
+  .file-row button{
+    background:none; border:none; color:var(--warm-grey); cursor:pointer;
+    font-size:15px; line-height:1; padding:2px 4px;
+  }
+  .file-row button:hover{ color:var(--signal); }
+  .file-row .move{ color:var(--blueprint); font-size:12px; cursor:pointer; }
+  .file-row .move:hover{ color:var(--paper); }
+
+  .field-row{ display:flex; gap:16px; flex-wrap:wrap; margin-top:18px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:130px; flex:1; }
+  .field label{ font-size:12px; color:var(--warm-grey); font-weight:500; }
+  .field input[type=text], .field input[type=number], .field select{
+    background:var(--charcoal);
+    border:1px solid var(--line);
+    color:var(--paper);
+    padding:9px 10px;
+    border-radius:3px;
+    font-family:var(--sans);
+    font-size:13.5px;
+  }
+  .field input:focus, .field select:focus{ outline:none; border-color:var(--blueprint); }
+  .field .hint{ font-family:var(--mono); font-size:10.5px; color:var(--warm-grey); }
+
+  .radio-group{ display:flex; gap:6px; flex-wrap:wrap; }
+  .radio-group label{
+    background:var(--charcoal);
+    border:1px solid var(--line);
+    padding:8px 12px;
+    border-radius:3px;
+    font-size:13px;
+    cursor:pointer;
+    color:var(--warm-grey);
+  }
+  .radio-group input{ display:none; }
+  .radio-group input:checked + span{ color:var(--paper); }
+  .radio-group label:has(input:checked){ border-color:var(--blueprint); background:rgba(91,155,196,0.1); }
+
+  input[type=range]{ width:100%; accent-color:var(--blueprint); }
+
+  .action-btn{
+    background:var(--blueprint-dim);
+    color:var(--paper);
+    border:none;
+    padding:12px 22px;
+    border-radius:3px;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    margin-top:20px;
+    transition:background .15s;
+  }
+  .action-btn:hover{ background:var(--blueprint); }
+  .action-btn:disabled{ background:var(--line); color:var(--warm-grey); cursor:not-allowed; }
+
+  .status{
+    margin-top:14px;
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--warm-grey);
+    line-height:1.7;
+    white-space:pre-line;
+  }
+  .status.ok{ color:var(--blueprint); }
+  .status.err{ color:var(--signal); }
+
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  @media (max-width:760px){
+    .frame{ flex-direction:column; }
+    .rail{ width:100%; flex-direction:row; overflow-x:auto; padding:14px 0; }
+    .rail-title{ display:none; }
+    .rail-foot{ display:none; }
+    .tool-btn{ white-space:nowrap; border-left:none; border-bottom:2px solid transparent; }
+    .tool-btn.active{ border-left:none; border-bottom:2px solid var(--blueprint); }
+    .surface{ padding:26px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <nav class="rail">
+    <div class="rail-title">
+      <div class="mark">FILE BENCH</div>
+      <h1>PDF &amp; Image Toolbox</h1>
+    </div>
+    <button class="tool-btn active" data-tab="merge"><span class="num">01</span> Merge PDFs</button>
+    <button class="tool-btn" data-tab="split"><span class="num">02</span> Split PDF</button>
+    <button class="tool-btn" data-tab="compress-pdf"><span class="num">03</span> Compress PDF</button>
+    <button class="tool-btn" data-tab="image"><span class="num">04</span> Image Tools</button>
+    <div class="rail-foot">
+      Runs entirely in your browser.<br>Nothing is uploaded anywhere.
+    </div>
+  </nav>
+
+  <main class="surface">
+
+    <!-- MERGE -->
+    <section class="tab-panel active" id="tab-merge">
+      <div class="surface-head">
+        <div class="eyebrow">TOOL 01</div>
+        <h2>Merge PDFs</h2>
+        <p>Combine two or more PDFs into a single file, in the order you set below.</p>
+      </div>
+      <div class="panel">
+        <div class="dropzone" id="merge-dz">
+          <div class="dz-title">Drop PDFs here or click to browse</div>
+          <div class="dz-sub">multiple files supported</div>
+          <input type="file" id="merge-input" accept="application/pdf" multiple>
+        </div>
+        <div class="file-list" id="merge-list"></div>
+        <button class="action-btn" id="merge-btn" disabled>Merge &amp; download</button>
+        <div class="status" id="merge-status"></div>
+      </div>
+    </section>
+
+    <!-- SPLIT -->
+    <section class="tab-panel" id="tab-split">
+      <div class="surface-head">
+        <div class="eyebrow">TOOL 02</div>
+        <h2>Split PDF</h2>
+        <p>Pull out a page range, or burst every page into its own file (delivered as a zip).</p>
+      </div>
+      <div class="panel">
+        <div class="dropzone" id="split-dz">
+          <div class="dz-title">Drop a PDF here or click to browse</div>
+          <div class="dz-sub">one file</div>
+          <input type="file" id="split-input" accept="application/pdf">
+        </div>
+        <div class="file-list" id="split-list"></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Mode</label>
+            <div class="radio-group">
+              <label><input type="radio" name="split-mode" value="range" checked><span>Extract range</span></label>
+              <label><input type="radio" name="split-mode" value="burst"><span>Every page (zip)</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="field-row" id="split-range-fields">
+          <div class="field">
+            <label>From page</label>
+            <input type="number" id="split-from" min="1" value="1">
+          </div>
+          <div class="field">
+            <label>To page</label>
+            <input type="number" id="split-to" min="1" value="1">
+          </div>
+          <div class="field">
+            <span class="hint" id="split-page-count">Upload a PDF to see page count</span>
+          </div>
+        </div>
+        <button class="action-btn" id="split-btn" disabled>Split &amp; download</button>
+        <div class="status" id="split-status"></div>
+      </div>
+    </section>
+
+    <!-- COMPRESS PDF -->
+    <section class="tab-panel" id="tab-compress-pdf">
+      <div class="surface-head">
+        <div class="eyebrow">TOOL 03</div>
+        <h2>Compress PDF</h2>
+        <p>Rasterizes each page to an image, then rebuilds the PDF. In "Target file size" mode this will lower quality and, if that's not enough, progressively shrink page resolution until the target is met — text stops being selectable, and very small targets can look noticeably soft. For text-heavy PDFs, a desktop tool (Ghostscript, Acrobat) will usually do better without that cost.</p>
+      </div>
+      <div class="panel">
+        <div class="dropzone" id="cpdf-dz">
+          <div class="dz-title">Drop a PDF here or click to browse</div>
+          <div class="dz-sub">one file</div>
+          <input type="file" id="cpdf-input" accept="application/pdf">
+        </div>
+        <div class="file-list" id="cpdf-list"></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Render resolution</label>
+            <select id="cpdf-dpi">
+              <option value="72">72 DPI — smallest, screen only</option>
+              <option value="100">100 DPI — small</option>
+              <option value="150" selected>150 DPI — balanced</option>
+              <option value="200">200 DPI — good quality</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Compression</label>
+            <div class="radio-group">
+              <label><input type="radio" name="cpdf-compress-mode" value="quality" checked><span>By quality</span></label>
+              <label><input type="radio" name="cpdf-compress-mode" value="target"><span>Target file size</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="field-row" id="cpdf-quality-fields">
+          <div class="field">
+            <label>JPEG quality: <span id="cpdf-q-val">65</span></label>
+            <input type="range" id="cpdf-quality" min="10" max="95" value="65">
+          </div>
+        </div>
+        <div class="field-row" id="cpdf-target-fields" style="display:none;">
+          <div class="field"><label>Target size (KB)</label><input type="number" id="cpdf-target-kb" min="1" value="500"></div>
+          <div class="field"><span class="hint">Quality is auto-tuned, and resolution auto-shrunk if needed, until the target is hit</span></div>
+        </div>
+        <button class="action-btn" id="cpdf-btn" disabled>Compress &amp; download</button>
+        <div class="status" id="cpdf-status"></div>
+      </div>
+    </section>
+
+    <!-- IMAGE -->
+    <section class="tab-panel" id="tab-image">
+      <div class="surface-head">
+        <div class="eyebrow">TOOL 04</div>
+        <h2>Image tools</h2>
+        <p>Convert format, resize by pixels/percent/cm, and compress — by quality or a target file size. In "Target file size" mode, if lowering quality isn't enough (or the format has no quality control, like PNG), dimensions are progressively shrunk until the target is met.</p>
+      </div>
+      <div class="panel">
+        <div class="dropzone" id="img-dz">
+          <div class="dz-title">Drop images here or click to browse</div>
+          <div class="dz-sub">multiple files supported · jpg, png, webp</div>
+          <input type="file" id="img-input" accept="image/*" multiple>
+        </div>
+        <div class="file-list" id="img-list"></div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Output format</label>
+            <select id="img-format">
+              <option value="image/jpeg">JPEG</option>
+              <option value="image/png">PNG</option>
+              <option value="image/webp">WebP</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Resize mode</label>
+            <select id="img-resize-mode">
+              <option value="none">No resize</option>
+              <option value="px">Exact pixels</option>
+              <option value="percent">Percent</option>
+              <option value="cm">Centimeters (with DPI)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row" id="img-px-fields" style="display:none;">
+          <div class="field"><label>Width (px)</label><input type="number" id="img-w" min="1"></div>
+          <div class="field"><label>Height (px)</label><input type="number" id="img-h" min="1"></div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <label style="font-size:12.5px;color:var(--warm-grey);display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="img-keep-ratio" checked style="width:auto;">Keep aspect ratio
+            </label>
+          </div>
+        </div>
+        <div class="field-row" id="img-percent-fields" style="display:none;">
+          <div class="field"><label>Scale (%)</label><input type="number" id="img-pct" min="1" max="500" value="50"></div>
+        </div>
+        <div class="field-row" id="img-cm-fields" style="display:none;">
+          <div class="field"><label>Width (cm)</label><input type="number" id="img-cm-w" min="0.1" step="0.1"></div>
+          <div class="field"><label>Height (cm)</label><input type="number" id="img-cm-h" min="0.1" step="0.1"></div>
+          <div class="field"><label>DPI</label><input type="number" id="img-dpi" value="300"></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Compression</label>
+            <div class="radio-group">
+              <label><input type="radio" name="img-compress-mode" value="quality" checked><span>By quality</span></label>
+              <label><input type="radio" name="img-compress-mode" value="target"><span>Target file size</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="field-row" id="img-quality-fields">
+          <div class="field">
+            <label>Quality: <span id="img-q-val">80</span> (JPEG/WebP only)</label>
+            <input type="range" id="img-quality" min="1" max="100" value="80">
+          </div>
+        </div>
+        <div class="field-row" id="img-target-fields" style="display:none;">
+          <div class="field"><label>Target size (KB)</label><input type="number" id="img-target-kb" min="1" value="200"></div>
+          <div class="field"><span class="hint">Quality is tuned first; dimensions shrink automatically if that's not enough to hit target</span></div>
+        </div>
+
+        <button class="action-btn" id="img-btn" disabled>Process &amp; download</button>
+        <div class="status" id="img-status"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ---------- tab switching ---------- */
+document.querySelectorAll('.tool-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+function fmtSize(bytes){
+  if(bytes < 1024) return bytes + ' B';
+  if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(2) + ' MB';
+}
+function setupDropzone(dz, input, onFiles){
+  dz.addEventListener('click', ()=>input.click());
+  input.addEventListener('change', ()=>onFiles(Array.from(input.files)));
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', ()=> dz.classList.remove('drag'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.classList.remove('drag');
+    onFiles(Array.from(e.dataTransfer.files));
+  });
+}
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+/* ================= MERGE ================= */
+let mergeFiles = [];
+setupDropzone(document.getElementById('merge-dz'), document.getElementById('merge-input'), files=>{
+  mergeFiles = mergeFiles.concat(files);
+  renderMergeList();
+});
+function renderMergeList(){
+  const list = document.getElementById('merge-list');
+  list.innerHTML='';
+  mergeFiles.forEach((f,i)=>{
+    const row = document.createElement('div'); row.className='file-row';
+    row.innerHTML = `
+      <span class="move" data-i="${i}" data-dir="-1">▲</span>
+      <span class="move" data-i="${i}" data-dir="1">▼</span>
+      <span class="fname">${f.name}</span>
+      <span class="fsize">${fmtSize(f.size)}</span>
+      <button data-remove="${i}">✕</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click', e=>{
+    mergeFiles.splice(+e.target.dataset.remove,1); renderMergeList();
+  }));
+  list.querySelectorAll('.move').forEach(b=>b.addEventListener('click', e=>{
+    const i = +e.target.dataset.i, dir = +e.target.dataset.dir, j = i+dir;
+    if(j<0||j>=mergeFiles.length) return;
+    [mergeFiles[i],mergeFiles[j]] = [mergeFiles[j],mergeFiles[i]];
+    renderMergeList();
+  }));
+  document.getElementById('merge-btn').disabled = mergeFiles.length < 2;
+}
+document.getElementById('merge-btn').addEventListener('click', async ()=>{
+  const status = document.getElementById('merge-status');
+  status.className='status'; status.textContent='Merging…';
+  try{
+    const { PDFDocument } = PDFLib;
+    const outDoc = await PDFDocument.create();
+    for(const f of mergeFiles){
+      const bytes = await f.arrayBuffer();
+      const src = await PDFDocument.load(bytes);
+      const pages = await outDoc.copyPages(src, src.getPageIndices());
+      pages.forEach(p=>outDoc.addPage(p));
+    }
+    const outBytes = await outDoc.save();
+    downloadBlob(new Blob([outBytes], {type:'application/pdf'}), 'merged.pdf');
+    status.className='status ok'; status.textContent=`Done — merged ${mergeFiles.length} files (${fmtSize(outBytes.length)}).`;
+  }catch(err){
+    status.className='status err'; status.textContent='Error: '+err.message;
+  }
+});
+
+/* ================= SPLIT ================= */
+let splitFile = null, splitPageCount = 0;
+setupDropzone(document.getElementById('split-dz'), document.getElementById('split-input'), async files=>{
+  if(!files.length) return;
+  splitFile = files[0];
+  document.getElementById('split-list').innerHTML =
+    `<div class="file-row"><span class="fname">${splitFile.name}</span><span class="fsize">${fmtSize(splitFile.size)}</span></div>`;
+  const { PDFDocument } = PDFLib;
+  const bytes = await splitFile.arrayBuffer();
+  const doc = await PDFDocument.load(bytes);
+  splitPageCount = doc.getPageCount();
+  document.getElementById('split-page-count').textContent = `${splitPageCount} pages`;
+  document.getElementById('split-to').value = splitPageCount;
+  document.getElementById('split-to').max = splitPageCount;
+  document.getElementById('split-from').max = splitPageCount;
+  document.getElementById('split-btn').disabled = false;
+});
+document.querySelectorAll('input[name=split-mode]').forEach(r=>r.addEventListener('change', ()=>{
+  document.getElementById('split-range-fields').style.display =
+    document.querySelector('input[name=split-mode]:checked').value === 'range' ? 'flex' : 'none';
+}));
+document.getElementById('split-btn').addEventListener('click', async ()=>{
+  const status = document.getElementById('split-status');
+  status.className='status'; status.textContent='Splitting…';
+  try{
+    const { PDFDocument } = PDFLib;
+    const bytes = await splitFile.arrayBuffer();
+    const srcDoc = await PDFDocument.load(bytes);
+    const mode = document.querySelector('input[name=split-mode]:checked').value;
+
+    if(mode === 'range'){
+      const from = Math.max(1, +document.getElementById('split-from').value);
+      const to = Math.min(splitPageCount, +document.getElementById('split-to').value);
+      if(from > to) throw new Error('"From" page must be ≤ "To" page.');
+      const outDoc = await PDFDocument.create();
+      const indices = []; for(let i=from-1;i<to;i++) indices.push(i);
+      const pages = await outDoc.copyPages(srcDoc, indices);
+      pages.forEach(p=>outDoc.addPage(p));
+      const outBytes = await outDoc.save();
+      downloadBlob(new Blob([outBytes], {type:'application/pdf'}), `pages-${from}-${to}.pdf`);
+      status.className='status ok'; status.textContent=`Done — extracted pages ${from}–${to} (${fmtSize(outBytes.length)}).`;
+    } else {
+      const zip = new JSZip();
+      for(let i=0;i<splitPageCount;i++){
+        const outDoc = await PDFDocument.create();
+        const [page] = await outDoc.copyPages(srcDoc, [i]);
+        outDoc.addPage(page);
+        const outBytes = await outDoc.save();
+        zip.file(`page-${String(i+1).padStart(3,'0')}.pdf`, outBytes);
+      }
+      const blob = await zip.generateAsync({type:'blob'});
+      downloadBlob(blob, 'split-pages.zip');
+      status.className='status ok'; status.textContent=`Done — ${splitPageCount} pages zipped.`;
+    }
+  }catch(err){
+    status.className='status err'; status.textContent='Error: '+err.message;
+  }
+});
+
+/* ================= COMPRESS PDF (rasterize) ================= */
+/* Uses pdf-lib to read page sizes + pdf.js is not loaded, so we render via an
+   embedded lightweight approach: draw each page's content is not directly
+   possible without pdf.js. We load pdf.js from cdnjs for rendering only. */
+const pdfjsScript = document.createElement('script');
+pdfjsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+pdfjsScript.addEventListener('load', async ()=>{
+  if(!window.pdfjsLib) return;
+  try{
+    // Fetch the worker source and load it via a same-origin blob URL —
+    // creating a Worker directly from a cross-origin script URL is blocked
+    // in this sandboxed environment, which is what causes pdf.js to fall
+    // back to "fake worker" (main-thread) mode.
+    const workerCode = await (await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js')).text();
+    const blob = new Blob([workerCode], {type:'application/javascript'});
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+  }catch(e){
+    // Fall back to the direct CDN URL if the fetch itself is blocked;
+    // pdf.js will still work, just via its main-thread fallback.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+});
+document.head.appendChild(pdfjsScript);
+
+let cpdfFile = null;
+setupDropzone(document.getElementById('cpdf-dz'), document.getElementById('cpdf-input'), files=>{
+  if(!files.length) return;
+  cpdfFile = files[0];
+  document.getElementById('cpdf-list').innerHTML =
+    `<div class="file-row"><span class="fname">${cpdfFile.name}</span><span class="fsize">${fmtSize(cpdfFile.size)}</span></div>`;
+  document.getElementById('cpdf-btn').disabled = false;
+});
+document.getElementById('cpdf-quality').addEventListener('input', e=>{
+  document.getElementById('cpdf-q-val').textContent = e.target.value;
+});
+document.querySelectorAll('input[name=cpdf-compress-mode]').forEach(r=>r.addEventListener('change', ()=>{
+  const mode = document.querySelector('input[name=cpdf-compress-mode]:checked').value;
+  document.getElementById('cpdf-quality-fields').style.display = mode==='quality' ? 'flex':'none';
+  document.getElementById('cpdf-target-fields').style.display = mode==='target' ? 'flex':'none';
+}));
+document.getElementById('cpdf-btn').addEventListener('click', async ()=>{
+  const status = document.getElementById('cpdf-status');
+  status.className='status'; status.textContent='Loading PDF renderer…';
+  try{
+    if(!window.pdfjsLib || !pdfjsLib.GlobalWorkerOptions.workerSrc){
+      status.textContent = 'Loading PDF renderer…';
+      await new Promise((res)=>{
+        const check = setInterval(()=>{
+          if(window.pdfjsLib && pdfjsLib.GlobalWorkerOptions.workerSrc){
+            clearInterval(check); res();
+          }
+        }, 100);
+        setTimeout(()=>{ clearInterval(check); res(); }, 8000); // proceed anyway after timeout
+      });
+    }
+    const dpi = +document.getElementById('cpdf-dpi').value;
+    const scale = dpi / 72;
+    const compressMode = document.querySelector('input[name=cpdf-compress-mode]:checked').value;
+
+    const bytes = await cpdfFile.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: bytes}).promise;
+
+    // Render every page once at the chosen DPI; this is the max-resolution
+    // source canvas for each page. Quality trials, and (in target mode)
+    // resolution-shrink trials, all redraw FROM this canvas — we never
+    // re-invoke pdf.js rendering, just downscale via canvas drawImage.
+    const rendered = [];
+    for(let i=1;i<=pdf.numPages;i++){
+      status.textContent = `Rendering page ${i} of ${pdf.numPages}…`;
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({scale});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({canvasContext: ctx, viewport}).promise;
+      rendered.push({ canvas, wPt: viewport.width*72/dpi, hPt: viewport.height*72/dpi });
+    }
+
+    // scaleFactor <1 shrinks the raster resolution used per page (page
+    // physical size in the output PDF stays the same — only pixel density drops).
+    async function buildAtQualityAndScale(qFrac, scaleFactor){
+      const { PDFDocument } = PDFLib;
+      const outDoc = await PDFDocument.create();
+      for(const r of rendered){
+        let sourceCanvas = r.canvas;
+        if(scaleFactor < 0.999){
+          const sc = document.createElement('canvas');
+          sc.width = Math.max(8, Math.round(r.canvas.width * scaleFactor));
+          sc.height = Math.max(8, Math.round(r.canvas.height * scaleFactor));
+          const sctx = sc.getContext('2d');
+          sctx.drawImage(r.canvas, 0, 0, sc.width, sc.height);
+          sourceCanvas = sc;
+        }
+        const jpegDataUrl = sourceCanvas.toDataURL('image/jpeg', qFrac);
+        const jpegBytes = await (await fetch(jpegDataUrl)).arrayBuffer();
+        const img = await outDoc.embedJpg(jpegBytes);
+        const pdfPage = outDoc.addPage([r.wPt, r.hPt]);
+        pdfPage.drawImage(img, {x:0, y:0, width:r.wPt, height:r.hPt});
+      }
+      return await outDoc.save();
+    }
+
+    let outBytes, chosenNote = '';
+    if(compressMode === 'target'){
+      const targetKb = +document.getElementById('cpdf-target-kb').value;
+      let best = null, bestQ = null, bestScale = null;
+      let scaleFactor = 1;
+
+      // Outer loop: at each resolution level, binary-search quality (1–95).
+      // If even quality 1 can't hit the target at this resolution, shrink
+      // the render resolution and try the whole quality range again.
+      // Keeps going until the target is hit or resolution bottoms out.
+      outerLoop:
+      for(let outerIter=0; outerIter<10; outerIter++){
+        let lo=1, hi=95;
+        for(let iter=0; iter<7; iter++){
+          const q = Math.round((lo+hi)/2);
+          status.textContent = `Trying quality ${q} at ${Math.round(scaleFactor*100)}% resolution… (pass ${outerIter+1})`;
+          const trialBytes = await buildAtQualityAndScale(q/100, scaleFactor);
+          if(trialBytes.length/1024 <= targetKb){ best = trialBytes; bestQ = q; bestScale = scaleFactor; lo = q+1; }
+          else { hi = q-1; }
+          if(lo>hi) break;
+        }
+        if(best) break outerLoop;
+        scaleFactor *= 0.7;
+        if(scaleFactor < 0.05) break;
+      }
+
+      if(!best){
+        // Absolute last resort: lowest quality at the smallest resolution tried.
+        status.textContent = 'Target is very aggressive — using lowest quality and resolution…';
+        best = await buildAtQualityAndScale(0.01, scaleFactor);
+        bestQ = 1; bestScale = scaleFactor;
+      }
+      outBytes = best;
+      chosenNote = ` at quality ${bestQ}, ${Math.round(bestScale*100)}% resolution`;
+    } else {
+      const quality = +document.getElementById('cpdf-quality').value / 100;
+      status.textContent = 'Encoding…';
+      outBytes = await buildAtQualityAndScale(quality, 1);
+    }
+
+    status.textContent = 'Saving…';
+    downloadBlob(new Blob([outBytes], {type:'application/pdf'}), 'compressed.pdf');
+    const pct = Math.round((1 - outBytes.length/cpdfFile.size)*100);
+    status.className='status ok';
+    status.textContent = `Done — ${fmtSize(cpdfFile.size)} → ${fmtSize(outBytes.length)}${chosenNote} (${pct>=0?pct+'% smaller':'larger — try lower DPI/quality'}).`;
+  }catch(err){
+    status.className='status err'; status.textContent='Error: '+err.message;
+  }
+});
+
+/* ================= IMAGE TOOLS ================= */
+let imgFiles = [];
+setupDropzone(document.getElementById('img-dz'), document.getElementById('img-input'), files=>{
+  imgFiles = imgFiles.concat(files);
+  renderImgList();
+});
+function renderImgList(){
+  const list = document.getElementById('img-list');
+  list.innerHTML='';
+  imgFiles.forEach((f,i)=>{
+    const row = document.createElement('div'); row.className='file-row';
+    row.innerHTML = `<span class="fname">${f.name}</span><span class="fsize">${fmtSize(f.size)}</span><button data-remove="${i}">✕</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click', e=>{
+    imgFiles.splice(+e.target.dataset.remove,1); renderImgList();
+  }));
+  document.getElementById('img-btn').disabled = imgFiles.length === 0;
+}
+
+document.getElementById('img-resize-mode').addEventListener('change', e=>{
+  document.getElementById('img-px-fields').style.display = e.target.value==='px' ? 'flex':'none';
+  document.getElementById('img-percent-fields').style.display = e.target.value==='percent' ? 'flex':'none';
+  document.getElementById('img-cm-fields').style.display = e.target.value==='cm' ? 'flex':'none';
+});
+document.querySelectorAll('input[name=img-compress-mode]').forEach(r=>r.addEventListener('change', ()=>{
+  const mode = document.querySelector('input[name=img-compress-mode]:checked').value;
+  document.getElementById('img-quality-fields').style.display = mode==='quality' ? 'flex':'none';
+  document.getElementById('img-target-fields').style.display = mode==='target' ? 'flex':'none';
+}));
+document.getElementById('img-quality').addEventListener('input', e=>{
+  document.getElementById('img-q-val').textContent = e.target.value;
+});
+
+let lastW=null, lastH=null;
+document.getElementById('img-w').addEventListener('input', e=>{
+  if(!document.getElementById('img-keep-ratio').checked || !lastW) return;
+  document.getElementById('img-h').value = Math.round(+e.target.value * lastH/lastW);
+});
+
+function loadImage(file){
+  return new Promise((res,rej)=>{
+    const img = new Image();
+    img.onload = ()=>res(img);
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function processOneImage(file, opts){
+  const img = await loadImage(file);
+  let targetW = img.naturalWidth, targetH = img.naturalHeight;
+
+  if(opts.resizeMode === 'px'){
+    targetW = opts.px.w || targetW;
+    targetH = opts.px.h || targetH;
+  } else if(opts.resizeMode === 'percent'){
+    targetW = Math.round(img.naturalWidth * opts.pct/100);
+    targetH = Math.round(img.naturalHeight * opts.pct/100);
+  } else if(opts.resizeMode === 'cm'){
+    targetW = Math.round(opts.cm.w * opts.cm.dpi / 2.54);
+    targetH = Math.round(opts.cm.h * opts.cm.dpi / 2.54);
+  }
+
+  // Full-resolution (post user-resize) source canvas. In target-size mode
+  // this also serves as the max-quality source for any further downscaling.
+  const baseCanvas = document.createElement('canvas');
+  baseCanvas.width = targetW; baseCanvas.height = targetH;
+  const baseCtx = baseCanvas.getContext('2d');
+  if(opts.format === 'image/jpeg'){ baseCtx.fillStyle = '#fff'; baseCtx.fillRect(0,0,targetW,targetH); }
+  baseCtx.drawImage(img, 0, 0, targetW, targetH);
+  URL.revokeObjectURL(img.src);
+
+  const canCompress = opts.format !== 'image/png'; // PNG has no quality knob
+
+  if(opts.compressMode !== 'target'){
+    const q = canCompress ? opts.quality/100 : undefined;
+    return await new Promise(r=>baseCanvas.toBlob(r, opts.format, q));
+  }
+
+  // ---- Target file size: quality first, then shrink dimensions if needed ----
+  // Outer loop shrinks the working canvas (redrawn fresh from baseCanvas each
+  // time, so we're always downsampling from full quality, not re-compressing
+  // an already-shrunk image). Inner loop binary-searches quality (for formats
+  // that support it). PNG has no quality control, so it relies entirely on
+  // the dimension-shrink loop to hit the target.
+  let curW = targetW, curH = targetH;
+  let bestBlob = null;
+  const minDim = 8;
+
+  for(let outer=0; outer<20; outer++){
+    const work = document.createElement('canvas');
+    work.width = curW; work.height = curH;
+    const wctx = work.getContext('2d');
+    if(opts.format === 'image/jpeg'){ wctx.fillStyle = '#fff'; wctx.fillRect(0,0,curW,curH); }
+    wctx.drawImage(baseCanvas, 0, 0, curW, curH);
+
+    if(canCompress){
+      let lo=1, hi=100;
+      for(let iter=0; iter<8; iter++){
+        const q = Math.round((lo+hi)/2);
+        const blob = await new Promise(r=>work.toBlob(r, opts.format, q/100));
+        if(blob.size/1024 <= opts.targetKb){ bestBlob = blob; lo = q+1; }
+        else { hi = q-1; }
+        if(lo>hi) break;
+      }
+    } else {
+      const blob = await new Promise(r=>work.toBlob(r, opts.format));
+      if(blob.size/1024 <= opts.targetKb) bestBlob = blob;
+    }
+
+    if(bestBlob) break;
+
+    if(curW<=minDim && curH<=minDim){
+      // Already at floor size — take whatever we can get, quality 1 if applicable.
+      bestBlob = canCompress
+        ? await new Promise(r=>work.toBlob(r, opts.format, 0.01))
+        : await new Promise(r=>work.toBlob(r, opts.format));
+      break;
+    }
+    curW = Math.max(minDim, Math.round(curW*0.85));
+    curH = Math.max(minDim, Math.round(curH*0.85));
+  }
+
+  return bestBlob;
+}
+
+document.getElementById('img-btn').addEventListener('click', async ()=>{
+  const status = document.getElementById('img-status');
+  status.className='status'; status.textContent='Processing…';
+  try{
+    const resizeMode = document.getElementById('img-resize-mode').value;
+    const opts = {
+      format: document.getElementById('img-format').value,
+      resizeMode,
+      px: { w: +document.getElementById('img-w').value, h: +document.getElementById('img-h').value },
+      pct: +document.getElementById('img-pct').value,
+      cm: { w: +document.getElementById('img-cm-w').value, h: +document.getElementById('img-cm-h').value, dpi: +document.getElementById('img-dpi').value },
+      compressMode: document.querySelector('input[name=img-compress-mode]:checked').value,
+      quality: +document.getElementById('img-quality').value,
+      targetKb: +document.getElementById('img-target-kb').value,
+    };
+    const ext = opts.format === 'image/jpeg' ? 'jpg' : opts.format === 'image/png' ? 'png' : 'webp';
+
+    if(imgFiles.length === 1){
+      const blob = await processOneImage(imgFiles[0], opts);
+      const base = imgFiles[0].name.replace(/\.[^.]+$/, '');
+      downloadBlob(blob, `${base}.${ext}`);
+      status.className='status ok';
+      status.textContent = `Done — ${fmtSize(imgFiles[0].size)} → ${fmtSize(blob.size)}.`;
+    } else {
+      const zip = new JSZip();
+      let report = [];
+      for(let i=0;i<imgFiles.length;i++){
+        status.textContent = `Processing ${i+1} of ${imgFiles.length}…`;
+        const blob = await processOneImage(imgFiles[i], opts);
+        const base = imgFiles[i].name.replace(/\.[^.]+$/, '');
+        zip.file(`${base}.${ext}`, blob);
+        report.push(`${imgFiles[i].name}: ${fmtSize(imgFiles[i].size)} → ${fmtSize(blob.size)}`);
+      }
+      const zipBlob = await zip.generateAsync({type:'blob'});
+      downloadBlob(zipBlob, 'images.zip');
+      status.className='status ok';
+      status.textContent = `Done — ${imgFiles.length} images zipped.\n` + report.join('\n');
+    }
+  }catch(err){
+    status.className='status err'; status.textContent='Error: '+err.message;
+  }
+});
+</script>
+</body>
+</html>
